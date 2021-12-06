@@ -1,0 +1,167 @@
+#Importing Breast Cancer Wisconsin (Diagnostic) Data Set
+bcwd <- read.csv("C:\\Users\\anjan\\Desktop\\R Multivariate Methods\\bcwd.csv")
+
+#Convert the features of the data: bcwd.data
+bcwd.data <- as.matrix(bcwd[,c(3:32)])
+
+#Set the row names of bcwd.data
+row.names(bcwd.data) <- bcwd$id
+
+#Create diagnosis vector
+diagnosis <- as.numeric(bcwd$diagnosis == "M")
+
+#How many benign/malignant
+table(bcwd$diagnosis)
+
+#Mean of each numeric column
+round(colMeans(bcwd.data),2)
+
+#SD of each numeric column
+roundSD <- function(x){
+  round(sd(x), 2)
+}
+apply(bcwd.data, 2, roundSD)
+
+#Correlation matrix
+library(corrplot)
+
+corrMatrix <- bcwd[,c(3:32)]
+
+#Rename the colnames
+cNames <- c("rad_m","txt_m","per_m",
+            "are_m","smt_m","cmp_m","con_m",
+            "ccp_m","sym_m","frd_m",
+            "rad_se","txt_se","per_se","are_se","smt_se",
+            "cmp_se","con_se","ccp_se","sym_se",
+            "frd_se","rad_w","txt_w","per_w",
+            "are_w","smt_w","cmp_w","con_w",
+            "ccp_w","sym_w","frd_w")
+
+colnames(corrMatrix) <- cNames
+
+Correlation_bcwd <- round(cor(corrMatrix), 2)
+
+corrplot(Correlation_bcwd, diag = FALSE, method="color", order="FPC", tl.srt = 90)
+
+#PCA using correlation matrix
+
+bcwd_pca <- prcomp(bcwd[c(3:32)], center = TRUE, scale = TRUE)
+summary(bcwd_pca)
+
+bcwd_pca$rotation
+
+# Eigen values
+round(pr.var, 2)
+
+#Screeplot
+screeplot(bcwd_pca, type = "l", npcs = 15, main = "Screeplot of the first 10 PCs")
+abline(h = 1, col="red", lty=5)
+legend("topright", legend=c("Eigenvalue = 1"),
+       col=c("red"), lty=5, cex=0.6)
+
+#Cumulative variance plot
+cumpro <- cumsum(bcwd_pca$sdev^2 / sum(bcwd_pca$sdev^2))
+plot(cumpro[0:15], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
+abline(v = 6, col="blue", lty=5)
+abline(h = 0.88759, col="blue", lty=5)
+legend("topleft", legend=c("Cut-off @ PC6"),
+       col=c("blue"), lty=5, cex=0.6)
+
+plot(bcwd_pca$x[,1],bcwd_pca$x[,2], xlab="PC1 (44.3%)", ylab = "PC2 (19%)", main = "PC1 / PC2 - plot")
+
+#2D PCA plot of the response variable Diagnosis
+install.packages("factoextra")
+library("factoextra")
+fviz_pca_ind(bcwd_pca, geom.ind = "point", pointshape = 21, 
+             pointsize = 2, 
+             fill.ind = bcwd$diagnosis, 
+             col.ind = "black", 
+             palette = "jco", 
+             addEllipses = TRUE,
+             label = "var",
+             col.var = "black",
+             repel = TRUE,
+             legend.title = "Diagnosis") +
+  ggtitle("2D PCA-plot from 30 feature dataset") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+#LDA
+
+#Extract the first 6 PCs
+ls(bcwd_pca)
+
+#Rotation of the first 6 PCs multiplied by the scaled data (scores)
+
+bcwd.pcs <- bcwd_pca$x[,1:6]
+head(bcwd.pcs, 20)
+
+#Diagnosis column to the PC transformed (diagnosis == 1 represents malignant and diagnosis == 0 represents benign)
+bcwd.pcst <- bcwd.pcs
+bcwd.pcst <- cbind(bcwd.pcs, diagnosis)
+head(bcwd.pcst)
+
+#Split the data set into training and test data
+N <- nrow(bcwd.pcst)
+N
+
+#Random number vector
+rvec <- runif(N)
+
+#Rows from dataframe
+bcwd.pcst.train <- bcwd.pcst[rvec < 0.75,]
+bcwd.pcst.test <- bcwd.pcst[rvec >= 0.75,]
+
+#Check the number of observations for train and test
+nrow(bcwd.pcst.train)
+nrow(bcwd.pcst.test)
+
+#Linear discriminant function by passing it to the lda() function of the MASS package
+
+library(MASS)
+
+bcwd.pcst.train.df <- bcwd.pcst.train
+
+#Convert the matrix into a dataframe
+bcwd.pcst.train.df <- as.data.frame(bcwd.pcst.train)
+
+#LDA on response variable Diagnosis
+bcwd.lda <- lda(diagnosis ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6, data = bcwd.pcst.train.df)
+
+#Summarize
+bcwd.lda
+
+bcwd.pcst.train.df <- bcwd.pcst.test
+
+#Matrix to dataframe
+bcwd.pcst.train.df <- as.data.frame(bcwd.pcst.test)
+
+bcwd.lda.predict <- predict(bcwd.lda, newdata = bcwd.pcst.train.df)
+
+#What functions can R invoke on this prediction
+ls(bcwd.lda.predict)
+
+
+#Print the predictions
+(bcwd.lda.predict.class <- bcwd.lda.predict$class)
+
+
+#Evaluate using ROC
+install.packages("ROCR")
+library("ROCR")
+
+bcwd.lda.predict.posteriors <- as.data.frame(bcwd.lda.predict$posterior)
+
+pred <- prediction(bcwd.lda.predict.posteriors[,2], bcwd.pcst.train.df$diagnosis)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred, measure = "auc")
+auc.train <- auc.train@y.values
+
+plot(roc.perf)
+abline(a=0, b= 1)
+text(x = .25, y = .65 ,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+
+
+
+
