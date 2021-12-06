@@ -1,0 +1,92 @@
+radon <- read.table("radon.csv", header=TRUE, sep = ",", dec=".")
+
+N<- nrow(radon)
+N
+
+#Sampling weight for each observation, Nh/nh
+w <- radon$popsize / radon$sampsize
+
+radon$w <- w
+w
+
+Sampling weights for the first 16 and last 16 observations are given below.
+> w
+[1] 1350.00000 1350.00000 1350.00000 1350.00000 1261.40351 1261.40351
+1261.40351 1261.40351
+[9] 1261.40351 1261.40351 1261.40351 1261.40351 1261.40351 1261.40351 1261.40351
+1261.40351
+.
+.
+[985] 1238.46154 1238.46154 1542.85714 1542.85714 1542.85714 1542.85714 1542.85714
+1542.85714
+[993] 1542.85714 1542.85714 1542.85714 1542.85714 1542.85714 1542.85714 1542.85714
+1542.85714
+
+
+library(survey)
+design <- svydesign(id=~0, strata = ~countynum, fpc = ~popsize, weights=w, data = radon)
+
+
+#Inference for mean
+
+svymean(~radon, design = design)
+
+#Since stratum (43) only has one PSU, an adjustment has to be made. Run svymean again.
+options(survey.adjust.domain.lonely=TRUE)
+options(survey.lonely.psu="adjust")
+
+#95% CI
+
+confint(svymean(~radon, design = design))
+
+#mean and 95% CI for log(radon)
+
+svymean(~log(radon), design = design)
+confint(svymean(~log(radon), design = design))
+
+The average radon level for Minnesota homes is 4.8986 (SE=0.1157). The 95% CI for
+this estimate is 4.59338 in the lower bound and 5.203723 in the upper bound.
+> svymean(~radon, design = design)
+mean SE
+radon 4.8986 0.1557
+> confint(svymean(~radon, design = design))
+2.5 % 97.5 %
+radon 4.59338 5.203723
+
+For log(radon)the estimated average is 1.3013 (SE=0.029), with the 95% CI being
+1.244481 for the lower bound and 1.358132 for the upper bound.
+> svymean(~log(radon), design = design)
+mean SE
+log(radon) 1.3013 0.029
+> confint(svymean(~log(radon), design = design))
+2.5 % 97.5 %
+log(radon) 1.244481 1.358132
+
+#Total numbers of homes in Minnesota with radon of or higher than 4
+x<- radon$radon
+x
+h<- ifelse(x>=4,1,0)
+radon$radon4<- h
+radon4 <- by(radon$w*radon$radon4 ,radon$countynum,sum)
+radon4
+sum(radon4)
+sd(radon4)
+722781.3+1.96*sd(radon4)
+722781.3-1.96*sd(radon4)
+
+The estimate of the total number of Minnesota homes that have radon levels of 4
+picocuries per liter or higher is 452 homes out of 1003. The 95% CI of this estimate falls
+between 0.5196088 and 0.4820700. Therefore, 452 households should be concerned
+and are recommended to fix their homes!
+
+> prop.test(x=452, n=1003, conf.level = 0.95)
+1-sample proportions test with continuity correction
+data: 452 out of 1003, null probability 0.5
+X-squared = 9.5753, df = 1, p-value = 0.001972
+alternative hypothesis: true p is not equal to 0.5
+95 percent confidence interval:
+0.4196088 0.4820700
+sample estimates:
+p
+0.4506481
+
